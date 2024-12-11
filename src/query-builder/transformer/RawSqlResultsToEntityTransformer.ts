@@ -152,7 +152,7 @@ export class RawSqlResultsToEntityTransformer {
             )
             if (discriminatorMetadata) metadata = discriminatorMetadata
         }
-        let entity: any = metadata.create(this.queryRunner, {
+        const entity: any = metadata.create(this.queryRunner, {
             fromDeserializer: true,
             pojo: this.expressionMap.options.indexOf("create-pojo") !== -1,
         })
@@ -204,55 +204,62 @@ export class RawSqlResultsToEntityTransformer {
 
     // get value from columns selections and put them into object
     protected transformColumns(
-        rawResults: any[],
-        alias: Alias,
-        entity: ObjectLiteral,
-        metadata: EntityMetadata,
-    ): boolean {
-        let hasData = false
-        metadata.columns.forEach((column) => {
-            // if table inheritance is used make sure this column is not child's column
-            if (
-                metadata.childEntityMetadatas.length > 0 &&
-                metadata.childEntityMetadatas.findIndex(
-                    (childMetadata) => childMetadata.target === column.target,
-                ) !== -1
-            )
-                return
-
-            const value =
-                rawResults[0][
-                    DriverUtils.buildAlias(
-                        this.driver,
-                        undefined,
-                        alias.name,
-                        column.databaseName,
-                    )
-                ]
-            if (value === undefined || column.isVirtual) return
-
-            // if user does not selected the whole entity or he used partial selection and does not select this particular column
-            // then we don't add this column and its value into the entity
-            if (
-                !this.expressionMap.selects.find(
-                    (select) =>
-                        select.selection === alias.name ||
-                        select.selection ===
-                            alias.name + "." + column.propertyPath,
-                )
-            )
-                return
-
-            column.setEntityValue(
-                entity,
-                this.driver.prepareHydratedValue(value, column),
-            )
-            if (value !== null)
-                // we don't mark it as has data because if we will have all nulls in our object - we don't need such object
-                hasData = true
-        })
-        return hasData
-    }
+			rawResults: any[],
+			alias: Alias,
+			entity: ObjectLiteral,
+			metadata: EntityMetadata,
+		): boolean {
+			let hasData = false
+			const columnsToHydrate = metadata.columns.map((column) => {
+					// if table inheritance is used make sure this column is not child's column
+					if (
+							metadata.childEntityMetadatas.length > 0 &&
+							metadata.childEntityMetadatas.findIndex(
+									(childMetadata) => childMetadata.target === column.target,
+							) !== -1
+					)
+							return
+		
+					const value =
+							rawResults[0][
+									DriverUtils.buildAlias(
+											this.driver,
+											undefined,
+											alias.name,
+											column.databaseName,
+									)
+							]
+					if (value === undefined || column.isVirtual) return
+		
+					// if user does not selected the whole entity or he used partial selection and does not select this particular column
+					// then we don't add this column and its value into the entity
+					if (
+							!this.expressionMap.selects.find(
+									(select) =>
+											select.selection === alias.name ||
+											select.selection ===
+													alias.name + "." + column.propertyPath,
+							)
+					)
+							return
+		
+					if (value !== null)
+							// we don't mark it as has data because if we will have all nulls in our object - we don't need such object
+							hasData = true
+		
+					return [column, value]
+			}).filter((column) => column !== undefined) as [ColumnMetadata, unknown][]
+		
+			if (hasData) {
+					columnsToHydrate.forEach(([column, value]) => {
+							column.setEntityValue(
+								entity,
+								this.driver.prepareHydratedValue(value, column),
+							)
+					})
+			}
+			return hasData
+		}
 
     /**
      * Transforms joined entities in the given raw results by a given alias and stores to the given (parent) entity
