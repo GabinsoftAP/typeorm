@@ -22,6 +22,6 @@ jobs:
       - name: Move to build folder
         run: cd build/package
       - name: Publish package
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
